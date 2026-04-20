@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ICM Shift Calendar Cleaner</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #38bdf8;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      color: #94a3b8;
+      margin-bottom: 40px;
+      text-align: center;
+      max-width: 560px;
+      line-height: 1.6;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 32px;
+      width: 100%;
+      max-width: 640px;
+      margin-bottom: 24px;
+    }
+    .card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #7dd3fc;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .drop-zone {
+      border: 2px dashed #334155;
+      border-radius: 12px;
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: #0f172a;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: #38bdf8;
+      background: #0c1a2e;
+    }
+    .drop-zone svg {
+      width: 48px;
+      height: 48px;
+      color: #475569;
+      margin-bottom: 12px;
+    }
+    .drop-zone p { color: #64748b; font-size: 0.95rem; }
+    .drop-zone span { color: #38bdf8; font-weight: 600; }
+    #fileInput { display: none; }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    label { display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 6px; }
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #e2e8f0;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus { border-color: #38bdf8; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: #0284c7;
+      color: white;
+      width: 100%;
+      justify-content: center;
+    }
+    .btn-primary:hover { background: #0369a1; }
+    .btn-primary:disabled { background: #1e3a4a; color: #475569; cursor: not-allowed; }
+    .btn-download {
+      background: #059669;
+      color: white;
+      width: 100%;
+      justify-content: center;
+    }
+    .btn-download:hover { background: #047857; }
+
+    #status {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      margin-top: 16px;
+      display: none;
+    }
+    .status-info { background: #0c2a3e; border: 1px solid #0369a1; color: #7dd3fc; }
+    .status-success { background: #052e16; border: 1px solid #059669; color: #6ee7b7; }
+    .status-error { background: #2d0a0a; border: 1px solid #dc2626; color: #fca5a5; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .stat-box {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-box .num { font-size: 1.8rem; font-weight: 700; color: #38bdf8; }
+    .stat-box .lbl { font-size: 0.75rem; color: #64748b; margin-top: 4px; }
+
+    #resultCard { display: none; }
+    #logBox {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 0.78rem;
+      color: #64748b;
+      max-height: 180px;
+      overflow-y: auto;
+      margin-top: 16px;
+      font-family: monospace;
+      line-height: 1.6;
+    }
+    .log-ok { color: #6ee7b7; }
+    .log-warn { color: #fbbf24; }
+    .log-info { color: #7dd3fc; }
+  </style>
+</head>
+<body>
+
+<h1>🗓️ ICM Shift Cleaner</h1>
+<p class="subtitle">Upload your ICM <code>.ics</code> calendar file. Duplicate shift blocks and break appointments will be merged into clean, single shift events — ready to download.</p>
+
+<!-- Upload -->
+<div class="card">
+  <h2>1 · Upload Calendar</h2>
+  <div class="drop-zone" id="dropZone">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+        d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+    </svg>
+    <p>Drag & drop your <span>.ics file</span> here<br>or <span>click to browse</span></p>
+    <input type="file" id="fileInput" accept=".ics">
+  </div>
+  <div id="status"></div>
+</div>
+
+<!-- Settings -->
+<div class="card">
+  <h2>2 · Settings</h2>
+  <div class="settings-grid">
+    <div>
+      <label>Max gap between blocks (minutes)</label>
+      <input type="number" id="maxGap" value="90" min="1" max="480"
+        title="Blocks within this gap of each other are considered part of the same shift">
+    </div>
+    <div>
+      <label>Break keyword (case-insensitive)</label>
+      <input type="text" id="breakKeyword" value="pause"
+        title="Events whose summary contains this word are treated as breaks">
+    </div>
+    <div>
+      <label>Merged event title prefix</label>
+      <input type="text" id="titlePrefix" value=""
+        title="Optional prefix added to the merged shift title">
+    </div>
+    <div>
+      <label>Max shift duration (hours)</label>
+      <input type="number" id="maxShiftHours" value="30" min="4" max="72"
+        title="Shifts longer than this are split — safety guard">
+    </div>
+  </div>
+</div>
+
+<!-- Process -->
+<div class="card">
+  <h2>3 · Process & Download</h2>
+  <button class="btn btn-primary" id="processBtn" disabled>
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+    </svg>
+    Process Calendar
+  </button>
+</div>
+
+<!-- Result -->
+<div class="card" id="resultCard">
+  <h2>4 · Result</h2>
+  <div class="stats">
+    <div class="stat-box"><div class="num" id="statIn">–</div><div class="lbl">Input Events</div></div>
+    <div class="stat-box"><div class="num" id="statOut">–</div><div class="lbl">Merged Shifts</div></div>
+    <div class="stat-box"><div class="num" id="statDrop">–</div><div class="lbl">Removed</div></div>
+  </div>
+  <div id="logBox"></div>
+  <br>
+  <button class="btn btn-download" id="downloadBtn">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+    </svg>
+    Download Cleaned Calendar
+  </button>
+</div>
+
+<script>
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function setStatus(msg, type = 'info') {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status-' + type;
+  el.style.display = 'block';
+}
+
+function log(msg, cls = '') {
+  const box = document.getElementById('logBox');
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = msg;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ─── File handling ───────────────────────────────────────────────────────────
+
+let rawICS = null;
+let cleanedICS = null;
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
+
+function handleFile(file) {
+  if (!file) return;
+  if (!file.name.endsWith('.ics')) { setStatus('Please upload a valid .ics file.', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    rawICS = e.target.result;
+    setStatus(`✓ Loaded: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`, 'success');
+    document.getElementById('processBtn').disabled = false;
+    dropZone.querySelector('p').innerHTML =
+      `<span>${file.name}</span> loaded — adjust settings and click Process`;
+  };
+  reader.readAsText(file);
+}
+
+// ─── ICS Parser ─────────────────────────────────────────────────────────────
+
+function unfoldLines(text) {
+  // RFC 5545 line folding: CRLF + whitespace = continuation
+  return text.replace(/\r\n[ \t]/g, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+function parseICS(text) {
+  const lines = unfoldLines(text).split('\n');
+  const events = [];
+  const calLines = []; // non-VEVENT lines (header/footer)
+  let inEvent = false;
+  let current = null;
+
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    if (line === 'BEGIN:VEVENT') {
+      inEvent = true;
+      current = { raw: [] };
+    } else if (line === 'END:VEVENT') {
+      inEvent = false;
+      current.raw.push(line);
+      events.push(current);
+      current = null;
+    } else if (inEvent) {
+      current.raw.push(line);
+      // Parse key properties
+      const colon = line.indexOf(':');
+      if (colon === -1) return;
+      const keyFull = line.substring(0, colon);
+      const val = line.substring(colon + 1);
+      const key = keyFull.split(';')[0].toUpperCase();
+
+      if (key === 'DTSTART') current.dtstart = parseICSDate(keyFull, val);
+      else if (key === 'DTEND') current.dtend = parseICSDate(keyFull, val);
+      else if (key === 'SUMMARY') current.summary = val;
+      else if (key === 'UID') current.uid = val;
+      else if (key === 'DESCRIPTION') current.description = val;
+      else if (key === 'LOCATION') current.location = val;
+    } else {
+      calLines.push(line);
+    }
+  }
+  return { events, calLines };
+}
+
+function parseICSDate(keyFull, val) {
+  // Handles TZID, DATE-only, and UTC
+  const tzMatch = keyFull.match(/TZID=([^;:]+)/i);
+  const tz = tzMatch ? tzMatch[1] : null;
+  const isDateOnly = !val.includes('T');
+
+  if (isDateOnly) {
+    const y = +val.slice(0,4), m = +val.slice(4,6)-1, d = +val.slice(6,8);
+    return { ts: new Date(y, m, d).getTime(), tz, dateOnly: true, raw: val };
+  }
+
+  const y = +val.slice(0,4), mo = +val.slice(4,6)-1, d = +val.slice(6,8);
+  const h = +val.slice(9,11), mi = +val.slice(11,13), s = +val.slice(13,15);
+  const utc = val.endsWith('Z');
+
+  let ts;
+  if (utc) {
+    ts = Date.UTC(y, mo, d, h, mi, s);
+  } else {
+    // Treat as local (we can't do full TZID resolution in vanilla JS)
+    ts = new Date(y, mo, d, h, mi, s).getTime();
+  }
+  return { ts, tz, utc, dateOnly: false, raw: val };
+}
+
+function formatICSDate(dtObj) {
+  if (!dtObj) return '';
+  if (dtObj.dateOnly) {
+    const d = new Date(dtObj.ts);
+    const pad = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+  }
+  if (dtObj.utc) {
+    const d = new Date(dtObj.ts);
+    const pad = n => String(n).padStart(2,'0');
+    return `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
+  }
+  // Local / TZID
+  const d = new Date(dtObj.ts);
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+// ─── Core Merge Logic ────────────────────────────────────────────────────────
+
+function processCalendar(icsText) {
+  const maxGapMs = +document.getElementById('maxGap').value * 60 * 1000;
+  const breakKw  = document.getElementById('breakKeyword').value.trim().toLowerCase();
+  const prefix   = document.getElementById('titlePrefix').value.trim();
+  const maxShiftMs = +document.getElementById('maxShiftHours').value * 3600 * 1000;
+
+  const { events, calLines } = parseICS(icsText);
+  const totalIn = events.length;
+
+  document.getElementById('logBox').innerHTML = '';
+  log(`Parsed ${totalIn} VEVENT entries.`, 'log-info');
+
+  // ── Step 1: Filter out events without valid timestamps
+  const valid = events.filter(e => e.dtstart && e.dtend);
+  if (valid.length < totalIn)
+    log(`⚠ Skipped ${totalIn - valid.length} events with missing dates.`, 'log-warn');
+
+  // ── Step 2: Sort by start time
+  valid.sort((a, b) => a.dtstart.ts - b.dtstart.ts);
+
+  // ── Step 3: Identify break events
+  const isBreak = e => breakKw && e.summary && e.summary.toLowerCase().includes(breakKw);
+
+  // ── Step 4: Group into shifts
+  // Strategy: greedily extend a shift window as long as the next event
+  // starts within maxGap of the current shift's end.
+  const groups = [];
+  let group = null;
+
+  for (const ev of valid) {
+    if (!group) {
+      group = { events: [ev], start: ev.dtstart.ts, end: ev.dtend.ts };
+    } else {
+      const gap = ev.dtstart.ts - group.end;
+      const wouldExceedMax = (ev.dtend.ts - group.start) > maxShiftMs;
+
+      if (gap <= maxGapMs && !wouldExceedMax) {
+        group.events.push(ev);
+        group.end = Math.max(group.end, ev.dtend.ts);
+      } else {
+        groups.push(group);
+        group = { events: [ev], start: ev.dtstart.ts, end: ev.dtend.ts };
+      }
+    }
+  }
+  if (group) groups.push(group);
+
+  log(`Identified ${groups.length} shift group(s).`, 'log-info');
+
+  // ── Step 5: For each group, deduplicate and build merged event
+  const mergedEvents = [];
+
+  for (const grp of groups) {
+    const nonBreaks = grp.events.filter(e => !isBreak(e));
+    const breaks    = grp.events.filter(e => isBreak(e));
+
+    // Deduplicate by summary+start (ICM doubles each block)
+    const seen = new Set();
+    const unique = nonBreaks.filter(e => {
+      const key = `${(e.summary||'').toLowerCase()}|${e.dtstart.ts}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    // Determine shift name: most common non-break summary
+    const freq = {};
+    for (const e of unique) {
+      const s = (e.summary || 'Shift').trim();
+      freq[s] = (freq[s] || 0) + 1;
+    }
+    const shiftName = Object.entries(freq).sort((a,b) => b[1]-a[1])[0]?.[0] || 'Shift';
+    const finalTitle = prefix ? `${prefix} ${shiftName}` : shiftName;
+
+    // Shift span = earliest start → latest end across ALL events in group
+    const allStarts = grp.events.map(e => e.dtstart.ts);
+    const allEnds   = grp.events.map(e => e.dtend.ts);
+    const shiftStart = Math.min(...allStarts);
+    const shiftEnd   = Math.max(...allEnds);
+
+    // Use dtstart object from earliest event for formatting metadata (tz, utc)
+    const refStart = grp.events.find(e => e.dtstart.ts === shiftStart);
+    const refEnd   = grp.events.find(e => e.dtend.ts   === shiftEnd);
+
+    const mergedDtstart = { ...refStart.dtstart, ts: shiftStart };
+    const mergedDtend   = { ...refEnd.dtend,     ts: shiftEnd   };
+
+    // Build description
+    const durationMs = shiftEnd - shiftStart;
+    const durationH  = (durationMs / 3600000).toFixed(2);
+    const breakMins  = breaks.reduce((s, e) => s + (e.dtend.ts - e.dtstart.ts), 0) / 60000;
+    const desc = [
+      `Shift duration: ${durationH}h`,
+      breakMins > 0 ? `Break: ${breakMins.toFixed(0)} min` : null,
+      `Merged from ${grp.events.length} block(s)`,
+    ].filter(Boolean).join('\\n');
+
+    // Collect location from first event that has one
+    const location = grp.events.find(e => e.location)?.location || '';
+
+    // Generate stable UID
+    const uid = `merged-${shiftStart}-${shiftEnd}@icm-cleaner`;
+
+    mergedEvents.push({
+      uid, finalTitle, mergedDtstart, mergedDtend, desc, location,
+      refStart, shiftStart, shiftEnd, grp
+    });
+
+    const d = new Date(shiftStart);
+    log(`✓ ${finalTitle} — ${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} (${durationH}h, ${grp.events.length} blocks merged)`, 'log-ok');
+  }
+
+  // ── Step 6: Rebuild ICS
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const dtstamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth()+1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+
+  // Extract header (everything before first VEVENT / END:VCALENDAR)
+  const headerLines = [];
+  const footerLines = [];
+  let pastHeader = false;
+  for (const l of calLines) {
+    if (!pastHeader && l.startsWith('END:VCALENDAR')) { pastHeader = true; footerLines.push(l); }
+    else if (!pastHeader) headerLines.push(l);
+    else footerLines.push(l);
+  }
+
+  const foldLine = str => {
+    // RFC 5545: fold at 75 octets
+    const out = [];
+    while (str.length > 75) { out.push(str.slice(0, 75)); str = ' ' + str.slice(75); }
+    out.push(str);
+    return out.join('\r\n');
+  };
+
+  const eventBlocks = mergedEvents.map(ev => {
+    const dtStartKey = ev.refStart.dtstart.tz
+      ? `DTSTART;TZID=${ev.refStart.dtstart.tz}`
+      : ev.refStart.dtstart.utc ? 'DTSTART' : 'DTSTART';
+    const dtEndKey = ev.refStart.dtend?.tz
+      ? `DTEND;TZID=${ev.refStart.dtend.tz}`
+      : ev.refStart.dtend?.utc ? 'DTEND' : 'DTEND';
+
+    const lines = [
+      'BEGIN:VEVENT',
+      foldLine(`UID:${ev.uid}`),
+      `DTSTAMP:${dtstamp}`,
+      foldLine(`${dtStartKey}:${formatICSDate(ev.mergedDtstart)}`),
+      foldLine(`${dtEndKey}:${formatICSDate(ev.mergedDtend)}`),
+      foldLine(`SUMMARY:${ev.finalTitle}`),
+      foldLine(`DESCRIPTION:${ev.desc}`),
+    ];
+    if (ev.location) lines.push(foldLine(`LOCATION:${ev.location}`));
+    lines.push('END:VEVENT');
+    return lines.join('\r\n');
+  });
+
+  const output = [
+    ...headerLines,
+    ...eventBlocks,
+    ...footerLines,
+  ].join('\r\n');
+
+  return {
+    ics: output,
+    totalIn,
+    totalOut: mergedEvents.length,
+    removed: totalIn - mergedEvents.length,
+  };
+}
+
+// ─── Button handlers ─────────────────────────────────────────────────────────
+
+document.getElementById('processBtn').addEventListener('click', () => {
+  if (!rawICS) return;
+  try {
+    const result = processCalendar(rawICS);
+    cleanedICS = result.ics;
+
+    document.getElementById('statIn').textContent  = result.totalIn;
+    document.getElementById('statOut').textContent = result.totalOut;
+    document.getElementById('statDrop').textContent = result.removed;
+    document.getElementById('resultCard').style.display = 'block';
+    document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth' });
+  } catch (err) {
+    setStatus('Error processing file: ' + err.message, 'error');
+    console.error(err);
+  }
+});
+
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  if (!cleanedICS) return;
+  const blob = new Blob([cleanedICS], { type: 'text/calendar;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'shifts_cleaned.ics';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
