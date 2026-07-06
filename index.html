@@ -295,6 +295,18 @@ function unfoldLines(text) {
   return text.replace(/\r\n[ \t]/g, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
 
+// Parses ISO 8601 duration string (e.g. PT4H30M) to milliseconds
+function parseDuration(val) {
+  const match = val.match(/P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?/i);
+  if (!match) return 0;
+  const w = parseInt(match[1] || 0, 10);
+  const d = parseInt(match[2] || 0, 10);
+  const h = parseInt(match[3] || 0, 10);
+  const m = parseInt(match[4] || 0, 10);
+  const s = parseInt(match[5] || 0, 10);
+  return (((w * 7 + d) * 24 + h) * 60 + m) * 60 * 1000 + (s * 1000);
+}
+
 function parseICS(text) {
   const lines = unfoldLines(text).split('\n');
   const events = [];
@@ -310,19 +322,32 @@ function parseICS(text) {
     } else if (line === 'END:VEVENT') {
       inEvent = false;
       current.raw.push(line);
+      
+      // Calculate DTEND if only DURATION was provided
+      if (current.dtstart && !current.dtend && current.duration) {
+        const durMs = parseDuration(current.duration);
+        current.dtend = {
+          ts: current.dtstart.ts + durMs,
+          tz: current.dtstart.tz,
+          utc: current.dtstart.utc,
+          dateOnly: current.dtstart.dateOnly
+        };
+      }
+      
       events.push(current);
       current = null;
     } else if (inEvent) {
       current.raw.push(line);
       // Parse key properties
       const colon = line.indexOf(':');
-      if (colon === -1) return;
+      if (colon === -1) continue; // skip invalid lines safely
       const keyFull = line.substring(0, colon);
       const val = line.substring(colon + 1);
       const key = keyFull.split(';')[0].toUpperCase();
 
       if (key === 'DTSTART') current.dtstart = parseICSDate(keyFull, val);
       else if (key === 'DTEND') current.dtend = parseICSDate(keyFull, val);
+      else if (key === 'DURATION') current.duration = val;
       else if (key === 'SUMMARY') current.summary = val;
       else if (key === 'UID') current.uid = val;
       else if (key === 'DESCRIPTION') current.description = val;
